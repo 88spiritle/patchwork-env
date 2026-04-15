@@ -1,27 +1,36 @@
-"""Parser for .env files — handles reading, tokenizing, and representing env entries."""
+"""Parser for .env files supporting comments, blank lines, and quoted values."""
 
 from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional
+from typing import List, Optional
+
+_INLINE_COMMENT_RE = re.compile(r"(?<!\\)\s+#.*$")
 
 
-ENV_LINE_RE = re.compile(
-    r"^\s*(?P<key>[A-Za-z_][A-Za-z0-9_]*)\s*=\s*(?P<value>.*)$"
-)
-COMMENT_RE = re.compile(r"^\s*#.*$")
+def _strip_inline_comment(value: str) -> str:
+    """Remove trailing inline comment from an unquoted value."""
+    return _INLINE_COMMENT_RE.sub("", value).strip()
+
+
+def _parse_value(raw: str) -> str:
+    """Parse a raw value string, handling quotes and inline comments."""
+    raw = raw.strip()
+    if (raw.startswith('"') and raw.endswith('"')) or (
+        raw.startswith("'") and raw.endswith("'")
+    ):
+        return raw[1:-1]
+    return _strip_inline_comment(raw)
 
 
 @dataclass
 class EnvEntry:
-    """Represents a single key-value pair from a .env file."""
-
     key: str
     value: str
-    comment: Optional[str] = None  # inline comment stripped from value
-    line_number: int = 0
+    comment: Optional[str] = None  # full-line comment or blank preserved as raw text
+    raw_line: str = ""
 
     def __eq__(self, other: object) -> bool:
         if not isinstance(other, EnvEntry):
@@ -34,60 +43,45 @@ class EnvEntry:
 
 @dataclass
 class EnvFile:
-    """Parsed representation of an entire .env file."""
+    name: str
+    entries: List[EnvEntry] = field(default_factory=list)
+    _raw_lines: List[str] = field(default_factory=list, repr=False)
 
-    path: Path
-    entries: list[EnvEntry] = field(default_factory=list)
-    raw_lines: list[str] = field(default_factory=list)
+    @classmethod
+    def from_text(cls, text: str, name: str = "<string>") -> "EnvFile":
+        entries: List[EnvEntry] = []
+        raw_lines = text.splitlines(keepends=True)
+        for line in raw_lines:
+            stripped = line.strip()
+            if not stripped or stripped.startswith("#"):
+                entries.append(EnvEntry(key="", value="", comment=line.rstrip("\n"), raw_line=line))
+                continue
+            if "=" not in stripped:
+                continue
+            key, _, raw_value = stripped.partition("=")
+            entries.append(
+                EnvEntry(key=key.strip(), value=_parse_value(raw_value), raw_line=line)
+            )
+        return cls(name=name, entries=entries, _raw_lines=raw_lines)
 
-    @property
-    def as_dict(self) -> dict[str, str]:
-        return {entry.key: entry.value for entry in self.entries}
+    @classmethod
+    def from_path(cls, path: Path) -> "EnvFile":
+        return cls.from_text(path.read_text(), name=str(path))
 
-    def get(self, key: str) -> Optional[EnvEntry]:
-        for entry in self.entries:
-            if entry.key == key:
-                return entry
+    def as_dict(self) -> dict:
+        return {e.key: e.value for e in self.entries if e.key}
+
+    def keys(self) -> List[str]:
+        return [e.key for e in self.entries if e.key]
+
+    def get(self, key: str) -> Optional[str]:
+        for e in self.entries:
+            if e.key == key:
+                return e.value
         return None
 
+    def __contains__(self, key: str) -> bool:
+        return any(e.key == key for e in self.entries)
 
-def _strip_inline_comment(raw_value: str) -> tuple[str, Optional[str]]:
-    """Separate the actual value from any trailing inline comment."""
-    # Only strip unquoted inline comments
-    if raw_value.startswith(("'", '"')):
-        quote = raw_value[0]
-        end = raw_value.rfind(quote, 1)
-        if end != -1:
-            return raw_value[1:end], None
-        return raw_value, None
-
-    if " #" in raw_value:
-        value, _, comment = raw_value.partition(" #")
-        return value.rstrip(), comment.strip()
-    return raw_value.rstrip(), None
-
-
-def parse_env_file(path: Path) -> EnvFile:
-    """Read and parse a .env file from disk."""
-    env_file = EnvFile(path=path)
-
-    if not path.exists():
-        raise FileNotFoundError(f".env file not found: {path}")
-
-    lines = path.read_text(encoding="utf-8").splitlines()
-    env_file.raw_lines = lines
-
-    for lineno, line in enumerate(lines, start=1):
-        if not line.strip() or COMMENT_RE.match(line):
-            continue
-
-        match = ENV_LINE_RE.match(line)
-        if match:
-            key = match.group("key")
-            raw_value = match.group("value")
-            value, comment = _strip_inline_comment(raw_value)
-            env_file.entries.append(
-                EnvEntry(key=key, value=value, comment=comment, line_number=lineno)
-            )
-
-    return env_file
+    def __repr__(self) -> str:
+        return f"EnvFile(name={self.name!r}, entries={len(self.entries)})"
