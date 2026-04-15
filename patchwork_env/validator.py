@@ -21,7 +21,7 @@ class ValidationIssue:
     severity: Severity
 
     def __repr__(self) -> str:
-        return f"ValidationIssue({self.severity.value}: {self.key!r} — {self.message})"
+        return f"ValidationIssue({self.severity.value}: {self.key!r} \u2014 {self.message})"
 
 
 @dataclass
@@ -36,12 +36,26 @@ class ValidationResult:
     def has_warnings(self) -> bool:
         return any(i.severity == Severity.WARNING for i in self.issues)
 
+    def errors(self) -> List[ValidationIssue]:
+        """Return only the issues with ERROR severity."""
+        return [i for i in self.issues if i.severity == Severity.ERROR]
+
+    def warnings(self) -> List[ValidationIssue]:
+        """Return only the issues with WARNING severity."""
+        return [i for i in self.issues if i.severity == Severity.WARNING]
+
 
 _KEY_RE = re.compile(r'^[A-Z][A-Z0-9_]*$')
 
 
 def validate_entries(entries: List[EnvEntry]) -> ValidationResult:
-    """Validate a list of parsed EnvEntry objects."""
+    """Validate a list of parsed EnvEntry objects.
+
+    Checks performed:
+    - Duplicate keys (ERROR)
+    - Key naming convention: UPPER_SNAKE_CASE starting with a letter (WARNING)
+    - Empty value (WARNING)
+    """
     result = ValidationResult()
     seen_keys: dict[str, int] = {}
 
