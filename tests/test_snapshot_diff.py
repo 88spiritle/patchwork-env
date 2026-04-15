@@ -78,3 +78,30 @@ def test_format_summary_counts(old_snap, new_snap):
     assert "+1" in summary
     assert "-1" in summary
     assert "~1" in summary
+
+
+def test_diff_empty_snapshots():
+    """Diffing two empty snapshots should produce no entries and no changes."""
+    snap = _make_snapshot("staging", {})
+    snap2 = _make_snapshot("staging", {})
+    report = diff_snapshots(snap, snap2)
+    assert report.entries == []
+    assert report.has_changes() is False
+
+
+def test_diff_all_added():
+    """Diffing an empty old snapshot against a populated new one marks all entries as added."""
+    old = _make_snapshot("prod", {})
+    new = _make_snapshot("prod", {"FOO": "bar", "BAZ": "qux"})
+    report = diff_snapshots(old, new)
+    assert all(e.status == "added" for e in report.entries)
+    assert len(report.entries) == 2
+
+
+def test_diff_all_removed():
+    """Diffing a populated old snapshot against an empty new one marks all entries as removed."""
+    old = _make_snapshot("prod", {"FOO": "bar", "BAZ": "qux"})
+    new = _make_snapshot("prod", {})
+    report = diff_snapshots(old, new)
+    assert all(e.status == "removed" for e in report.entries)
+    assert len(report.entries) == 2
