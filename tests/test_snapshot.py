@@ -68,3 +68,10 @@ def test_list_snapshots_filtered(env_file, tmp_path):
     prod_snaps = list_snapshots(store, environment="prod")
     assert all("prod_" in os.path.basename(p) for p in prod_snaps)
     assert len(prod_snaps) == 1
+
+
+def test_load_snapshot_invalid_path(tmp_path):
+    """Loading a non-existent snapshot file should raise FileNotFoundError."""
+    missing = str(tmp_path / "ghost_snapshot.json")
+    with pytest.raises(FileNotFoundError):
+        load_snapshot(missing)
