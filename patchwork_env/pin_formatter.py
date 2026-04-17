@@ -32,3 +32,14 @@ def format_pin_summary(registry: PinRegistry) -> str:
     count = len(registry.pins)
     noun = "pin" if count == 1 else "pins"
     return f"Registry '{registry.name}': {count} {noun} active."
+
+
+def format_pinned_key(key: str, pinned: PinnedKey, *, colour: bool = True) -> str:
+    """Format a single pinned key-value pair as a human-readable string."""
+    value_str = _c(pinned.value, "33") if colour else pinned.value
+    key_str = _c(key, "1") if colour else key
+    line = f"{key_str} = {value_str}"
+    if pinned.reason:
+        reason_str = _c(f"# {pinned.reason}", "2") if colour else f"# {pinned.reason}"
+        line += f"  {reason_str}"
+    return line
