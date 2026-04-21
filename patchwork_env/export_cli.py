@@ -49,6 +49,17 @@ def register_export_subcommand(subparsers) -> None:  # type: ignore[type-arg]
     p.set_defaults(func=cmd_export)
 
 
+def _write_output(text: str, output_path: str | None) -> None:
+    """Write *text* to *output_path*, or to stdout when *output_path* is None.
+
+    Raises OSError if the destination file cannot be written.
+    """
+    if output_path:
+        Path(output_path).write_text(text, encoding="utf-8")
+    else:
+        print(text, end="")
+
+
 def cmd_export(args: Namespace) -> int:
     """Execute the export sub-command.  Returns an exit code."""
     env_path = Path(args.env_file)
@@ -66,9 +77,10 @@ def cmd_export(args: Namespace) -> int:
         print(f"error: unknown format '{args.fmt}'", file=sys.stderr)
         return 1
 
-    if args.output:
-        Path(args.output).write_text(text, encoding="utf-8")
-    else:
-        print(text, end="")
+    try:
+        _write_output(text, args.output)
+    except OSError as exc:
+        print(f"error: could not write output: {exc}", file=sys.stderr)
+        return 1
 
     return 0
