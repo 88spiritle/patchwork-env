@@ -45,6 +45,15 @@ class PinRegistry:
                 result.append(entry)
         return result
 
+    def missing_keys(self, entries: List[EnvEntry]) -> List[str]:
+        """Return pinned keys that have no matching entry in the provided list.
+
+        Useful for detecting pins that reference keys not present in an env
+        file, which may indicate a stale or misconfigured pin.
+        """
+        entry_keys = {entry.key for entry in entries if entry.key}
+        return [key for key in self.pins if key not in entry_keys]
+
     def to_dict(self) -> dict:
         return {
             "name": self.name,
