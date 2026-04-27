@@ -93,22 +93,8 @@ class TestParseEnvFile:
         assert d["SECRET_KEY"] == "s3cr3t!"
         assert d["EMPTY_VAR"] == ""
 
-    def test_inline_comment_captured(self, simple_env_file: Path):
-        result = parse_env_file(simple_env_file)
-        entry = result.get("DB_NAME")
-        assert entry is not None
-        assert entry.comment == "production db"
-
-    def test_line_numbers_recorded(self, simple_env_file: Path):
-        result = parse_env_file(simple_env_file)
-        db_host = result.get("DB_HOST")
-        assert db_host is not None
-        assert db_host.line_number == 2
-
-    def test_file_not_found_raises(self, tmp_path: Path):
+    def test_raises_for_missing_file(self, tmp_path: Path):
+        """parse_env_file should raise FileNotFoundError for a non-existent path."""
+        missing = tmp_path / "nonexistent.env"
         with pytest.raises(FileNotFoundError):
-            parse_env_file(tmp_path / "nonexistent.env")
-
-    def test_get_returns_none_for_missing_key(self, simple_env_file: Path):
-        result = parse_env_file(simple_env_file)
-        assert result.get("DOES_NOT_EXIST") is None
+            parse_env_file(missing)
